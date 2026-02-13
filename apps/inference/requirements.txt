@@ -6,3 +6,4 @@ open_clip_torch>=2.24.0
 opencv-python-headless>=4.8.0
 Pillow>=10.0.0
 numpy>=1.24.0
+requests>=2.28.0
