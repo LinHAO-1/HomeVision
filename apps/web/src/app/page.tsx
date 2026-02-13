@@ -1,3 +1,5 @@
+import { HomeVisionUpload } from '@/components/HomeVisionUpload';
+
 export default function Home() {
   return (
     <main style={{ padding: '2rem 1.5rem', width: '100%', minHeight: '100vh' }}>
@@ -21,6 +23,7 @@ export default function Home() {
           Optimized for <strong style={{ color: 'var(--accent)' }}>Kitchen</strong> · Tuning: Bathroom, Bedroom, Living Room, Dining Room, Exterior
         </div>
       </div>
+      <HomeVisionUpload />
     </main>
   );
 }
