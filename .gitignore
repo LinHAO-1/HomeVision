@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+
+# Build output
+dist/
+.next/
+.turbo/
+
+# Environment
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+.cursor/
+*.swp
+
+# Internal
+.internal/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+pgdata/
+
+# Trained adapter and exported labels (train locally, don't commit)
+adapter.pt
+adapter_meta.json
+labels.json
+apps/inference/adapter.pt
+apps/inference/adapter_meta.json
+
+# Training images (user photos, keep local)
+images/
