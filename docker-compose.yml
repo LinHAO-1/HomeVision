@@ -12,3 +12,53 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  inference:
+    build: ./apps/inference
+    ports:
+      - "8000:8000"
+    environment:
+      # Set these to load a fine-tuned adapter (after training)
+      ADAPTER_WEIGHTS: /app/adapter.pt
+      ADAPTER_META: /app/adapter_meta.json
+    volumes:
+      - ./adapter.pt:/app/adapter.pt:ro
+      - ./adapter_meta.json:/app/adapter_meta.json:ro
+    # Optional: use GPU for faster inference
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  api:
+    build: ./apps/api
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_DATABASE: homevision
+      INFERENCE_URL: http://inference:8000
+      ENABLE_LABELING: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      inference:
+        condition: service_started
+
+  web:
+    build: ./apps/web
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      NEXT_PUBLIC_INFERENCE_URL: http://localhost:8000
+      NEXT_PUBLIC_ENABLE_LABELING: "true"
+    depends_on:
+      - api

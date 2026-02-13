@@ -1,0 +1,38 @@
+# Dev overrides: volume mounts + hot-reload commands
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+services:
+  postgres:
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  inference:
+    volumes:
+      - ./apps/inference:/app
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+      target: dev
+    environment:
+      ENABLE_LABELING: "true"
+    volumes:
+      - ./apps/api/src:/app/src
+    command: ["npx", "nest", "start", "--watch"]
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      target: dev
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      NEXT_PUBLIC_INFERENCE_URL: http://localhost:8000
+      NEXT_PUBLIC_ENABLE_LABELING: "true"
+    volumes:
+      - ./apps/web/src:/app/src
+    command: ["npx", "next", "dev"]
+
+volumes:
+  pgdata:

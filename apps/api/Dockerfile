@@ -1,8 +1,17 @@
-FROM node:20-alpine AS build
+# Dev stage: includes devDependencies for watch mode
+FROM node:20-alpine AS dev
+
 WORKDIR /app
+
 COPY package*.json ./
 RUN npm ci
+
 COPY . .
+EXPOSE 3001
+CMD ["npx", "nest", "start", "--watch"]
+
+# Production build
+FROM dev AS build
 RUN npm run build
 
 FROM node:20-alpine AS production
