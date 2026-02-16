@@ -7,7 +7,7 @@ import FormData from 'form-data';
 import { Job } from './entities/job.entity';
 
 const MAX_CONCURRENT_JOBS = 2;
-const INFERENCE_URL = process.env.INFERENCE_URL || 'http://inference:8000';
+const INFERENCE_URL = process.env.INFERENCE_URL || 'http://localhost:8000';
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
