@@ -4,6 +4,7 @@ import { JobsModule } from './jobs/jobs.module';
 import { LabelsModule } from './labels/labels.module';
 import { Job } from './jobs/entities/job.entity';
 import { Label } from './labels/entities/label.entity';
+import { RoomType } from './labels/entities/room-type.entity';
 
 const dbUrl = process.env.DATABASE_URL;
 const enableLabeling = process.env.ENABLE_LABELING === 'true';
@@ -13,7 +14,7 @@ const dbConfig = dbUrl
       type: 'postgres' as const,
       url: dbUrl,
       ssl: { rejectUnauthorized: false },
-      entities: [Job, Label],
+      entities: [Job, Label, RoomType],
       synchronize: true,
     }
   : {
@@ -23,7 +24,7 @@ const dbConfig = dbUrl
       username: process.env.DB_USERNAME || 'postgres',
       password: process.env.DB_PASSWORD || 'postgres',
       database: process.env.DB_DATABASE || 'homevision',
-      entities: [Job, Label],
+      entities: [Job, Label, RoomType],
       synchronize: true,
     };
 

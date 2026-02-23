@@ -20,11 +20,29 @@ const COUNTERTOP_FEATURES = [
 
 function featuresWithSingleCountertop(featureList: string[]): Set<string> {
   const set = new Set(featureList);
-  const countertopsInSet = COUNTERTOP_FEATURES.filter((c) => set.has(c));
+  const countertopsInSet = COUNTERTOP_FEATURES.filter((countertop) => set.has(countertop));
   if (countertopsInSet.length <= 1) return set;
-  countertopsInSet.slice(1).forEach((c) => set.delete(c));
+  countertopsInSet.slice(1).forEach((countertop) => set.delete(countertop));
   return set;
 }
+
+const ROOM_FEATURE_CATEGORIES: Record<string, string[]> = {
+  Kitchen:       ['Kitchen', 'Flooring', 'General'],
+  Bathroom:      ['Bathroom', 'Flooring', 'General'],
+  Bedroom:       ['Bedroom', 'Living Space', 'Flooring', 'General'],
+  'Living Room': ['Living Space', 'Flooring', 'General'],
+  'Dining Room': ['Living Space', 'Flooring', 'General'],
+  Exterior:      ['Exterior', 'General'],
+};
+
+const ROOM_AMENITY_FILTER: Record<string, string[]> = {
+  Kitchen:       ['Stainless Steel Appliances', 'Fireplace', 'View', 'Natural Light', 'Updated Kitchen'],
+  Bathroom:      ['Natural Light'],
+  Bedroom:       ['Fireplace', 'View', 'Natural Light'],
+  'Living Room': ['Fireplace', 'View', 'Natural Light'],
+  'Dining Room': ['Fireplace', 'View', 'Natural Light'],
+  Exterior:      ['Pool', 'View'],
+};
 
 const ALL_FEATURES: Record<string, string[]> = {
   Kitchen: [
@@ -107,17 +125,17 @@ export function LabelingTool() {
           `${API_BASE}/api/v1/labels?filename=${encodeURIComponent(file.name)}`
         );
         if (!response.ok || cancelled) return;
-        const data: SavedLabel[] = await response.json();
+        const savedLabels: SavedLabel[] = await response.json();
         if (cancelled) return;
-        if (data.length > 0) {
-          const existingLabel = data[0];
+        if (savedLabels.length > 0) {
+          const existingLabel = savedLabels[0];
           setRoomType(existingLabel.roomType);
           const filteredAmenities = existingLabel.amenities.filter((amenity) => amenity !== 'Hardwood Floors');
           setAmenities(new Set(filteredAmenities));
-          const loadedFeatures = [...existingLabel.features];
-          if (existingLabel.amenities.includes('Hardwood Floors') && !loadedFeatures.includes('Hardwood Floors'))
-            loadedFeatures.push('Hardwood Floors');
-          setFeatures(featuresWithSingleCountertop(loadedFeatures));
+          const featuresList = [...existingLabel.features];
+          if (existingLabel.amenities.includes('Hardwood Floors') && !featuresList.includes('Hardwood Floors'))
+            featuresList.push('Hardwood Floors');
+          setFeatures(featuresWithSingleCountertop(featuresList));
           setExistingLabelLoaded(true);
         } else {
           setRoomType('Unknown');
@@ -155,15 +173,15 @@ export function LabelingTool() {
         setLoading(false);
         return;
       }
-      const data: InferenceResult[] = await response.json();
-      const inferenceResult = data[0];
-      setPredictions(inferenceResult);
+      const inferenceResults: InferenceResult[] = await response.json();
+      const prediction = inferenceResults[0];
+      setPredictions(prediction);
       setExistingLabelLoaded(false);
 
       // Pre-fill labels from model predictions
-      setRoomType(inferenceResult.roomType.label);
-      setAmenities(new Set(inferenceResult.amenities.map((amenity) => amenity.label)));
-      setFeatures(featuresWithSingleCountertop(inferenceResult.features.map((feature) => feature.label)));
+      setRoomType(prediction.roomType.label);
+      setAmenities(new Set(prediction.amenities.map((amenity) => amenity.label)));
+      setFeatures(featuresWithSingleCountertop(prediction.features.map((feature) => feature.label)));
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Error');
     }
@@ -186,7 +204,7 @@ export function LabelingTool() {
         next.delete(label);
       } else {
         if (COUNTERTOP_FEATURES.includes(label)) {
-          COUNTERTOP_FEATURES.forEach((c) => next.delete(c));
+          COUNTERTOP_FEATURES.forEach((countertop) => next.delete(countertop));
         }
         next.add(label);
       }
@@ -205,7 +223,7 @@ export function LabelingTool() {
     setSaved(false);
     setError(null);
     setExistingLabelLoaded(false);
-    setFileInputKey((key) => key + 1);
+    setFileInputKey((currentKey) => currentKey + 1);
   }, [preview]);
 
   const saveLabel = useCallback(async () => {
@@ -267,7 +285,7 @@ export function LabelingTool() {
             cursor: file && !loading ? 'pointer' : 'not-allowed',
           }}
         >
-          {loading ? 'AnalyzingΓÇª' : 'Analyze & Pre-fill'}
+          {loading ? 'Analyzing…' : 'Analyze & Pre-fill'}
         </button>
       </div>
 
@@ -334,7 +352,7 @@ export function LabelingTool() {
             <div style={{ marginBottom: '1rem' }}>
               <p style={{ fontWeight: 600, marginBottom: 4 }}>Amenities</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {ALL_AMENITIES.map((amenity) => (
+                {(ROOM_AMENITY_FILTER[roomType] ?? ALL_AMENITIES).map((amenity) => (
                   <span
                     key={amenity}
                     onClick={() => toggleAmenity(amenity)}
@@ -348,17 +366,22 @@ export function LabelingTool() {
 
             <div style={{ marginBottom: '1rem' }}>
               <p style={{ fontWeight: 600, marginBottom: 4 }}>Features</p>
-              {Object.entries(ALL_FEATURES).map(([category, featureNames]) => (
+              {Object.entries(ALL_FEATURES)
+                .filter(([category]) => {
+                  const allowed = ROOM_FEATURE_CATEGORIES[roomType];
+                  return !allowed || allowed.includes(category);
+                })
+                .map(([category, featureNames]) => (
                 <div key={category} style={{ marginBottom: 8 }}>
                   <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: 2 }}>{category}</p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {featureNames.map((featureName) => (
+                    {featureNames.map((feature) => (
                       <span
-                        key={featureName}
-                        onClick={() => toggleFeature(featureName)}
-                        style={chipStyle(features.has(featureName))}
+                        key={feature}
+                        onClick={() => toggleFeature(feature)}
+                        style={chipStyle(features.has(feature))}
                       >
-                        {featureName}
+                        {feature}
                       </span>
                     ))}
                   </div>

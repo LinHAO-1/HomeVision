@@ -172,6 +172,29 @@ AMENITY_THRESHOLD = 0.30
 FEATURE_THRESHOLD = 0.25  # Lowered so more features (e.g. kitchen island, countertops) are detected
 
 # ---------------------------------------------------------------------------
+# Room-aware filtering: only return features/amenities relevant to the
+# detected room type.  "Unknown" bypasses filtering entirely.
+# ---------------------------------------------------------------------------
+
+ROOM_FEATURE_CATEGORIES: dict[str, list[str]] = {
+    "Kitchen":     ["Kitchen", "Flooring", "General"],
+    "Bathroom":    ["Bathroom", "Flooring", "General"],
+    "Bedroom":     ["Bedroom", "Living Space", "Flooring", "General"],
+    "Living Room": ["Living Space", "Flooring", "General"],
+    "Dining Room": ["Living Space", "Flooring", "General"],
+    "Exterior":    ["Exterior", "General"],
+}
+
+ROOM_AMENITIES: dict[str, list[str]] = {
+    "Kitchen":     ["Stainless Steel Appliances", "Fireplace", "View", "Natural Light", "Updated Kitchen"],
+    "Bathroom":    ["Natural Light"],
+    "Bedroom":     ["Fireplace", "View", "Natural Light"],
+    "Living Room": ["Fireplace", "View", "Natural Light"],
+    "Dining Room": ["Fireplace", "View", "Natural Light"],
+    "Exterior":    ["Pool", "View"],
+}
+
+# ---------------------------------------------------------------------------
 # Optional: load fine-tuned adapter if available
 # ---------------------------------------------------------------------------
 
@@ -222,22 +245,28 @@ def compute_analysis(pil_img: Image.Image) -> tuple[dict, list[dict], list[dict]
             "topPrompt": ROOM_PROMPT_TEXTS[best_room_idx],
         }
 
-        # --- Amenities ---
+        # --- Amenities (filtered by detected room) ---
+        allowed_amenities = ROOM_AMENITIES.get(detected_room)
         amenity_scores = (image_features @ amenity_text_features.T).cpu().numpy().squeeze()
         amenities = []
         for i, score in enumerate(amenity_scores):
             if score >= AMENITY_THRESHOLD:
+                if allowed_amenities is not None and AMENITY_LABELS[i] not in allowed_amenities:
+                    continue
                 amenities.append({
                     "label": AMENITY_LABELS[i],
                     "score": round(float(score), 2),
                     "prompt": AMENITY_PROMPT_TEXTS[i],
                 })
 
-        # --- Features (50+) ---
+        # --- Features (filtered by detected room) ---
+        allowed_categories = ROOM_FEATURE_CATEGORIES.get(detected_room)
         feature_scores = (image_features @ feature_text_features.T).cpu().numpy().squeeze()
         features = []
         for i, score in enumerate(feature_scores):
             if score >= FEATURE_THRESHOLD:
+                if allowed_categories is not None and FEATURE_CATEGORIES[i] not in allowed_categories:
+                    continue
                 features.append({
                     "label": FEATURE_LABELS[i],
                     "score": round(float(score), 2),

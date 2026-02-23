@@ -3,7 +3,10 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { RoomType } from './room-type.entity';
 
 @Entity('labels')
 export class Label {
@@ -13,8 +16,9 @@ export class Label {
   @Column({ type: 'text' })
   filename: string;
 
-  @Column({ type: 'text' })
-  roomType: string;
+  @ManyToOne(() => RoomType, { eager: true, nullable: false })
+  @JoinColumn({ name: 'room_type_id' })
+  roomType: RoomType;
 
   @Column({ type: 'jsonb' })
   amenities: string[];
