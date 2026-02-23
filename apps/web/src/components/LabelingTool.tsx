@@ -18,11 +18,20 @@ const COUNTERTOP_FEATURES = [
   'Granite Countertop', 'Marble Countertop', 'Quartz Countertop', 'Stone Countertop', 'Stainless Steel Countertop', 'Wood Countertop',
 ];
 
-function featuresWithSingleCountertop(featureList: string[]): Set<string> {
+const FLOORING_FEATURES = [
+  'Hardwood Floors', 'Carpet', 'Tile Flooring', 'Laminate Flooring', 'Stone Flooring',
+];
+
+const EXCLUSIVE_FEATURE_GROUPS = [COUNTERTOP_FEATURES, FLOORING_FEATURES];
+
+function featuresWithExclusiveGroups(featureList: string[]): Set<string> {
   const set = new Set(featureList);
-  const countertopsInSet = COUNTERTOP_FEATURES.filter((countertop) => set.has(countertop));
-  if (countertopsInSet.length <= 1) return set;
-  countertopsInSet.slice(1).forEach((countertop) => set.delete(countertop));
+  for (const group of EXCLUSIVE_FEATURE_GROUPS) {
+    const matches = group.filter((feature) => set.has(feature));
+    if (matches.length > 1) {
+      matches.slice(1).forEach((feature) => set.delete(feature));
+    }
+  }
   return set;
 }
 
@@ -135,7 +144,7 @@ export function LabelingTool() {
           const featuresList = [...existingLabel.features];
           if (existingLabel.amenities.includes('Hardwood Floors') && !featuresList.includes('Hardwood Floors'))
             featuresList.push('Hardwood Floors');
-          setFeatures(featuresWithSingleCountertop(featuresList));
+          setFeatures(featuresWithExclusiveGroups(featuresList));
           setExistingLabelLoaded(true);
         } else {
           setRoomType('Unknown');
@@ -181,7 +190,7 @@ export function LabelingTool() {
       // Pre-fill labels from model predictions
       setRoomType(prediction.roomType.label);
       setAmenities(new Set(prediction.amenities.map((amenity) => amenity.label)));
-      setFeatures(featuresWithSingleCountertop(prediction.features.map((feature) => feature.label)));
+      setFeatures(featuresWithExclusiveGroups(prediction.features.map((feature) => feature.label)));
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Error');
     }
@@ -203,8 +212,10 @@ export function LabelingTool() {
       if (next.has(label)) {
         next.delete(label);
       } else {
-        if (COUNTERTOP_FEATURES.includes(label)) {
-          COUNTERTOP_FEATURES.forEach((countertop) => next.delete(countertop));
+        for (const group of EXCLUSIVE_FEATURE_GROUPS) {
+          if (group.includes(label)) {
+            group.forEach((feature) => next.delete(feature));
+          }
         }
         next.add(label);
       }

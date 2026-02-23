@@ -18,7 +18,7 @@ export interface UpdateLabelDto {
   features?: string[];
 }
 
-interface LabelResponse {
+export interface LabelResponse {
   id: number;
   filename: string;
   roomType: string;

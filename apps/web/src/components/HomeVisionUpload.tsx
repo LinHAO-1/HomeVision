@@ -30,27 +30,29 @@ type PhotoResult = {
   adapterPredictions?: Array<{ label: string; confidence: number }>;
 };
 
-/** Derive room display and feature list: use adapter room when available and don't duplicate in Features. */
+/** Derive room display and feature list. Uses consensus: adapter room when it agrees with zero-shot or zero-shot is unknown. */
 function getRoomAndFeatures(photo: PhotoResult): {
   roomLabel: string;
   roomScore: number;
   featurePredictions: Array<{ label: string; confidence: number }>;
 } {
-  const adapter = photo.adapterPredictions ?? [];
-  const roomFromAdapter = adapter
-    .filter((p) => ROOM_TYPE_LABELS.has(p.label))
+  const adapterPredictions = photo.adapterPredictions ?? [];
+
+  const topAdapterRoomPrediction = adapterPredictions
+    .filter((prediction) => ROOM_TYPE_LABELS.has(prediction.label))
     .sort((a, b) => b.confidence - a.confidence)[0];
-  if (roomFromAdapter) {
-    return {
-      roomLabel: roomFromAdapter.label,
-      roomScore: roomFromAdapter.confidence,
-      featurePredictions: adapter.filter((p) => p.label !== roomFromAdapter.label),
-    };
-  }
+
+  const isZeroShotUnknown = photo.roomType.label === 'Unknown';
+  const adapterAgreesWithZeroShot = topAdapterRoomPrediction?.label === photo.roomType.label;
+  const shouldUseAdapterRoom =
+    topAdapterRoomPrediction && (adapterAgreesWithZeroShot || isZeroShotUnknown);
+
   return {
-    roomLabel: photo.roomType.label,
-    roomScore: photo.roomType.score,
-    featurePredictions: adapter,
+    roomLabel: shouldUseAdapterRoom ? topAdapterRoomPrediction.label : photo.roomType.label,
+    roomScore: shouldUseAdapterRoom ? topAdapterRoomPrediction.confidence : photo.roomType.score,
+    featurePredictions: adapterPredictions.filter(
+      (prediction) => !ROOM_TYPE_LABELS.has(prediction.label),
+    ),
   };
 }
 

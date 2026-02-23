@@ -167,9 +167,16 @@ with torch.no_grad():
 # Thresholds
 # ---------------------------------------------------------------------------
 
-ROOM_THRESHOLD = 0.25
+ROOM_THRESHOLD = 0.15
 AMENITY_THRESHOLD = 0.30
-FEATURE_THRESHOLD = 0.25  # Lowered so more features (e.g. kitchen island, countertops) are detected
+FEATURE_THRESHOLD_DEFAULT = 0.25
+FEATURE_THRESHOLD_BY_CATEGORY: dict[str, float] = {
+    "Flooring": 0.45,
+}
+
+MUTUALLY_EXCLUSIVE_GROUPS: list[set[str]] = [
+    {"Hardwood Floors", "Carpet", "Tile Flooring", "Laminate Flooring", "Stone Flooring"},
+]
 
 # ---------------------------------------------------------------------------
 # Room-aware filtering: only return features/amenities relevant to the
@@ -193,6 +200,30 @@ ROOM_AMENITIES: dict[str, list[str]] = {
     "Dining Room": ["Fireplace", "View", "Natural Light"],
     "Exterior":    ["Pool", "View"],
 }
+
+FEATURE_LABEL_TO_CATEGORY = {label: category for label, _, category in FEATURE_FLAT}
+ROOM_LABEL_SET = set(ROOM_LABELS)
+AMENITY_LABEL_SET = set(AMENITY_LABELS)
+
+
+def _allowed_labels_for_room(room: str) -> set[str]:
+    """Build the set of adapter label names that are relevant for a given room type."""
+    allowed = set()
+    allowed.update(ROOM_LABEL_SET)
+    allowed_amenities = ROOM_AMENITIES.get(room)
+    if allowed_amenities is not None:
+        allowed.update(allowed_amenities)
+    else:
+        allowed.update(AMENITY_LABEL_SET)
+    allowed_categories = ROOM_FEATURE_CATEGORIES.get(room)
+    if allowed_categories is not None:
+        for label, category in FEATURE_LABEL_TO_CATEGORY.items():
+            if category in allowed_categories:
+                allowed.add(label)
+    else:
+        allowed.update(FEATURE_LABEL_TO_CATEGORY.keys())
+    return allowed
+
 
 # ---------------------------------------------------------------------------
 # Optional: load fine-tuned adapter if available
@@ -264,18 +295,26 @@ def compute_analysis(pil_img: Image.Image) -> tuple[dict, list[dict], list[dict]
         feature_scores = (image_features @ feature_text_features.T).cpu().numpy().squeeze()
         features = []
         for i, score in enumerate(feature_scores):
-            if score >= FEATURE_THRESHOLD:
-                if allowed_categories is not None and FEATURE_CATEGORIES[i] not in allowed_categories:
+            category = FEATURE_CATEGORIES[i]
+            threshold = FEATURE_THRESHOLD_BY_CATEGORY.get(category, FEATURE_THRESHOLD_DEFAULT)
+            if score >= threshold:
+                if allowed_categories is not None and category not in allowed_categories:
                     continue
                 features.append({
                     "label": FEATURE_LABELS[i],
                     "score": round(float(score), 2),
-                    "category": FEATURE_CATEGORIES[i],
+                    "category": category,
                     "prompt": FEATURE_PROMPT_TEXTS[i],
                 })
         features.sort(key=lambda x: x["score"], reverse=True)
 
-        # --- Adapter predictions (if loaded) ---
+        for group in MUTUALLY_EXCLUSIVE_GROUPS:
+            group_hits = [feature for feature in features if feature["label"] in group]
+            if len(group_hits) > 1:
+                keep = group_hits[0]["label"]
+                features = [feature for feature in features if feature["label"] not in group or feature["label"] == keep]
+
+        # --- Adapter predictions (if loaded, filtered by detected room) ---
         adapter_predictions: list[dict] = []
         if adapter_model is not None:
             adapter_threshold = float(os.environ.get("ADAPTER_CONFIDENCE_THRESHOLD", "0.4"))
@@ -287,6 +326,13 @@ def compute_analysis(pil_img: Image.Image) -> tuple[dict, list[dict], list[dict]
                         "label": adapter_labels[i],
                         "confidence": round(float(probability), 2),
                     })
+
+            if detected_room != "Unknown":
+                allowed_adapter_labels = _allowed_labels_for_room(detected_room)
+                adapter_predictions = [
+                    prediction for prediction in adapter_predictions
+                    if prediction["label"] in allowed_adapter_labels
+                ]
 
     return room_type, amenities, features, adapter_predictions
 
