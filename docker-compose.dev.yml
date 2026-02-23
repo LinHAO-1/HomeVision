@@ -8,7 +8,9 @@ services:
   inference:
     volumes:
       - ./apps/inference:/app
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+      - ./images:/data/images
+    command:
+      ['uvicorn', 'main:app', '--host', '0.0.0.0', '--port', '8000', '--reload']
 
   api:
     build:
@@ -16,10 +18,10 @@ services:
       dockerfile: Dockerfile
       target: dev
     environment:
-      ENABLE_LABELING: "true"
+      ENABLE_LABELING: 'true'
     volumes:
       - ./apps/api/src:/app/src
-    command: ["npx", "nest", "start", "--watch"]
+    command: ['npx', 'nest', 'start', '--watch']
 
   web:
     build:
@@ -29,10 +31,10 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:3001
       NEXT_PUBLIC_INFERENCE_URL: http://localhost:8000
-      NEXT_PUBLIC_ENABLE_LABELING: "true"
+      NEXT_PUBLIC_ENABLE_LABELING: 'true'
     volumes:
       - ./apps/web/src:/app/src
-    command: ["npx", "next", "dev"]
+    command: ['npx', 'next', 'dev']
 
 volumes:
   pgdata:

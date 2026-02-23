@@ -1,0 +1,10 @@
+# Adapter override: mount trained adapter files from apps/inference/
+# Usage: add -f docker-compose.adapter.yml after your other compose files
+services:
+  inference:
+    environment:
+      ADAPTER_WEIGHTS: /adapters/adapter.pt
+      ADAPTER_META: /adapters/adapter_meta.json
+    volumes:
+      - ./apps/inference/adapter.pt:/adapters/adapter.pt:ro
+      - ./apps/inference/adapter_meta.json:/adapters/adapter_meta.json:ro

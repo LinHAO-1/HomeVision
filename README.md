@@ -37,9 +37,9 @@ HomeVision/
 │       └── src/
 │           ├── app/      # Pages (home, labeling)
 │           └── components/
-├── docker-compose.yml
-├── docker-compose.dev.yml
-└── .env
+├── docker-compose.yml          # Base services
+├── docker-compose.dev.yml      # Dev overrides (hot-reload, volume mounts)
+└── docker-compose.adapter.yml  # Optional: mount trained adapter files
 ```
 
 ## Architecture
@@ -64,19 +64,31 @@ git clone https://github.com/LinHAO-1/HomeVision.git && cd HomeVision
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
-That starts all four services: Postgres, inference, API, and web — with hot-reload enabled for development.
+That starts all four services: Postgres, inference, API, and web — with hot-reload enabled for development. No additional setup or dependencies required.
 
 Open **http://localhost:3000** in your browser.
 
+### Compose files
+
+The project uses layered Docker Compose files:
+
+| File | Purpose |
+|------|---------|
+| `docker-compose.yml` | Base services (Postgres, inference, API, web) |
+| `docker-compose.dev.yml` | Dev overrides — hot-reload, source volume mounts |
+| `docker-compose.adapter.yml` | **Optional** — mounts trained adapter files for enhanced predictions |
+
+For development, use the first two. Add the third after training an adapter (see [Labeling & Training](#labeling--training)).
+
 ### Environment
 
-Create a `.env` file in the project root if you want to use an external Postgres instance:
+Optionally create a `.env` file in the project root to use an external Postgres instance:
 
 ```
 DATABASE_URL=postgresql://user:pass@host:5432/dbname
 ```
 
-If omitted, the Docker Compose stack uses a local Postgres container with default credentials.
+If omitted, the stack uses the local Postgres container with default credentials.
 
 ### Stop
 
@@ -173,38 +185,65 @@ Returns the same per-photo array without the job wrapper.
 
 ## Labeling & Training
 
-HomeVision includes a built-in labeling tool and adapter training pipeline for improving predictions on your own data.
+HomeVision includes a labeling tool and adapter training pipeline for improving predictions on your own data. The adapter is completely optional. Without it, the app uses zero-shot OpenCLIP inference out of the box.
 
-### Labeling tool
+The full workflow has four steps, done in order:
 
-Set `ENABLE_LABELING=true` (already set in the dev compose) and open **http://localhost:3000/label**. From there you can:
+### 1. Label photos
 
-- Upload a photo and see the model's predictions
-- Correct room type, amenities, and features
-- Save labels to the database
+Open **http://localhost:3000/label** (labeling is already enabled in the dev compose). Upload a photo and the model shows its predictions. Correct the room type, amenities, and features as needed, then save. Each saved label is stored in your database.
 
-### Export labels
+### 2. Put training images on disk
 
-```bash
-curl http://localhost:3001/api/v1/labels/export > labels.json
-```
+The training script needs access to the actual image files on disk. Create an `images/` folder at the repo root and place the same photos you labeled there (e.g. `images/kitchen/photo1.jpg`). The filenames must match what you used when labeling.
 
-### Train adapter
+The dev compose mounts `./images` to `/data/images` inside the inference container, so anything you put in `images/` is available to the training script.
 
-Place training images in the `images/` directory and run:
+### 3. Export labels and train
+
+First, export your labels from the database into a JSON file that the training script can read:
 
 ```bash
-cd apps/inference
-python train_adapter.py --labels ../../labels.json --images ../../images --epochs 20
+curl -s http://localhost:3001/api/v1/labels/export -o apps/inference/labels.json
 ```
 
-This trains a lightweight linear adapter on frozen CLIP embeddings. The output (`adapter.pt` and `adapter_meta.json`) can be mounted into the inference container — see `docker-compose.yml` for the volume config.
+This pulls every label you saved and writes it to `apps/inference/labels.json`.
 
-### Evaluate
+Then run training inside the inference container. No local Python setup needed:
 
 ```bash
-python evaluate.py --labels ../../labels.json --images ../../images --adapter adapter.pt --meta adapter_meta.json
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec inference \
+  python train_adapter.py --labels labels.json --images-dir /data/images/kitchen \
+  --output-weights adapter.pt --output-meta adapter_meta.json --epochs 60
 ```
 
-Reports per-label precision, recall, F1, and macro averages.
+This trains a lightweight linear adapter on frozen CLIP embeddings. The output files (`adapter.pt` and `adapter_meta.json`) land in `apps/inference/` on your host since the dev compose mounts that directory to `/app` in the container.
+
+### 4. Load the adapter
+
+Restart the stack with the adapter override so inference picks up the trained weights:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.adapter.yml up --build
+```
+
+The adapter override mounts `apps/inference/adapter.pt` and `apps/inference/adapter_meta.json` into the inference container. No copying files around. Training output and inference input are the same location.
+
+You can verify the adapter loaded by hitting the health endpoint:
+
+```bash
+curl http://localhost:8000/health
+# {"status":"ok","adapter_loaded":true}
+```
+
+### Evaluate (optional)
+
+After training, you can check how well the model performs against your labeled data:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec inference \
+  python evaluate.py --labels labels.json --images-dir /data/images/kitchen
+```
+
+This reports per label accuracy and shows which images the model struggles with the most. Useful for deciding whether to add more labels or adjust your training data before retraining.
 

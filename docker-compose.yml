@@ -17,13 +17,6 @@ services:
     build: ./apps/inference
     ports:
       - "8000:8000"
-    environment:
-      # Set these to load a fine-tuned adapter (after training)
-      ADAPTER_WEIGHTS: /app/adapter.pt
-      ADAPTER_META: /app/adapter_meta.json
-    volumes:
-      - ./adapter.pt:/app/adapter.pt:ro
-      - ./adapter_meta.json:/app/adapter_meta.json:ro
     # Optional: use GPU for faster inference
     # deploy:
     #   resources:

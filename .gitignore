@@ -30,11 +30,10 @@ Thumbs.db
 pgdata/
 
 # Trained adapter and exported labels (train locally, don't commit)
-adapter.pt
-adapter_meta.json
-labels.json
 apps/inference/adapter.pt
 apps/inference/adapter_meta.json
+apps/inference/labels.json
+labels.json
 
 # Training images (user photos, keep local)
 images/
